@@ -1,1 +1,1 @@
-__all__ = ["analyzer", "fixer", "chatbot", "server", "cli", "llm"]
+__all__ = ["analyzer", "chatbot", "cli", "gui", "local_model"]

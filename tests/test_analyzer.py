@@ -1,3 +1,13 @@
+import sys
+from pathlib import Path
+
+# Garante que a pasta "src" esteja no sys.path quando rodar os testes localmente,
+# sem precisar instalar o pacote ou configurar PYTHONPATH manualmente.
+ROOT = Path(__file__).resolve().parents[1]
+SRC = ROOT / "src"
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
+
 from codebug_bot.analyzer import analyze_code
 
 

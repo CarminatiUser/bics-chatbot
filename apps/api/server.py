@@ -4,6 +4,14 @@ import os
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 
+# Ensure the parent 'apps' folder is on sys.path so package imports like
+# `from codebug_bot.chatbot import chat_process` work when running this file
+# from the monorepo root or from `apps/api`.
+import sys
+ROOT_APPS = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if ROOT_APPS not in sys.path:
+    sys.path.insert(0, ROOT_APPS)
+
 from codebug_bot.chatbot import chat_process
 
 
@@ -25,7 +33,7 @@ def create_app() -> Flask:
         try:
             out = chat_process(code, apply_fix=bool(apply_fix))
             return jsonify(out)
-        except Exception as exc:  # keep simple error handling for now
+        except Exception as exc:
             return jsonify({"error": str(exc)}), 500
 
     return app

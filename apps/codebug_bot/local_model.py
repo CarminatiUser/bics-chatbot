@@ -19,10 +19,8 @@ from typing import Any
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
-CORPUS_PATH = os.getenv(
-    "BICS_CORPUS_PATH",
-    os.path.join("data", "corpus", "python_outputs.txt"),
-)
+_default_local = os.path.join(os.path.dirname(__file__), "corpus", "python_outputs.txt")
+CORPUS_PATH = os.getenv("BICS_CORPUS_PATH", _default_local)
 
 
 def _load_corpus(path: str = CORPUS_PATH) -> list[str]:
@@ -42,7 +40,6 @@ def _load_corpus(path: str = CORPUS_PATH) -> list[str]:
                 buf = []
             else:
                 buf.append(line.rstrip("\n"))
-        # último trecho, se houver
         last = "\n".join(buf).strip()
         if last:
             snippets.append(last)

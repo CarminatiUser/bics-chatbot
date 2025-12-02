@@ -6,3 +6,4 @@ build/
 .coverage
 .pytest_cache/
 .data/
+node_modules/

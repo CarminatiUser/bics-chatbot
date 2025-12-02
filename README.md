@@ -15,6 +15,33 @@ source .venv/bin/activate  # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
+## 🚀 Rodar API + Frontend (local)
+
+1. Criar e ativar ambiente virtual e instalar dependências do Python
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+1. Iniciar API:
+
+```bash
+python src/server.py
+```
+
+1. Iniciar Frontend:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+O servidor de desenvolvimento do React faz proxy das requisições para /api/analyze para o servidor Flask quando ambos estão rodando na mesma máquina. Se você executar o servidor Flask em uma porta personalizada, altere a URL do fetch em frontend/src/App.jsx de acordo.
+
+
 ## 🖥️ Utilizando o código
 
 ```bash

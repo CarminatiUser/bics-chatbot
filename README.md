@@ -1,6 +1,6 @@
 # bics-chatbot
 
-Chatbot em Python para **apontar defeitos em trechos de código** e explicar problemas de forma clara.
+Chatbot em Python para **apontar defeitos em trechos de código** e explicar problemas.
 Hoje ele combina:
 
 - checagem de sintaxe com `ast.parse` (erros como falta de `:`, parênteses, aspas);
@@ -13,24 +13,9 @@ Hoje ele combina:
 python -m venv .venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-pre-commit install
 ```
 
-## 🧪 Rodando testes e lint
-
-```bash
-pytest -q
-ruff check .
-black --check .
-```
-
-## 🚀 Usando via CLI
-
-```bash
-python -m codebug_bot.cli --file examples/broken_missing_colon.py --apply-fix
-```
-
-## 🖥️ Interface gráfica (GUI)
+## 🖥️ Utilizando o código
 
 ```bash
 python -m codebug_bot.gui
@@ -54,8 +39,6 @@ python -m codebug_bot.gui
    - `model_score`: quão parecido o código é com o dataset;
    - `similar_examples`: alguns trechos reais do dataset mais próximos do código analisado.
 
-> Limites: heurísticas não “entendem” semântica. Para bugs lógicos, plugue um LLM em `codebug_bot/llm.py`.
-
 ## 📦 Dataset (treinamento local)
 
 O script `scripts/prepare_dataset.py` explica como baixar e limpar o dataset
@@ -65,12 +48,3 @@ Esse corpus é salvo em `data/corpus/python_outputs.txt` e é usado para:
 
 - treinar o modelo TF‑IDF local na primeira execução;
 - calcular o score de similaridade e trazer exemplos parecidos na interface.
-
-## 🤝 Contribuindo
-
-- Veja `CONTRIBUTING.md` e o template de PR. Use uma branch por feature, commits pequenos e descritivos.
-- O CI roda lint + testes.
-
-## 📝 Licença
-
-MIT.

@@ -1,226 +1,77 @@
 from __future__ import annotations
 
 import ast
-import re
-from dataclasses import dataclass
 from typing import Any
 
-BLOCK_KEYWORDS = {
-    "if",
-    "elif",
-    "else",
-    "for",
-    "while",
-    "try",
-    "except",
-    "finally",
-    "with",
-    "def",
-    "class",
-    "match",
-    "case",
-}
-
-
-@dataclass
-class Issue:
-    issue_type: str
-    line: int
-    col: int | None
-    message: str
-    confidence: float
-
-
-def _line_requires_colon(line: str) -> bool:
-    stripped = line.strip()
-    if not stripped:
-        return False
-    # e.g., "if x" or "def f(x)"
-    head = stripped.split()[0]
-    return head in BLOCK_KEYWORDS and not stripped.endswith(":")
-
-
-def _count_unbalanced_pairs(code: str) -> dict[str, int]:
-    pairs = {"()": 0, "[]": 0, "{}": 0}
-    for ch in code:
-        if ch == "(":
-            pairs["()"] += 1
-        elif ch == ")":
-            pairs["()"] -= 1
-        elif ch == "[":
-            pairs["[]"] += 1
-        elif ch == "]":
-            pairs["[]"] -= 1
-        elif ch == "{":
-            pairs["{}"] += 1
-        elif ch == "}":
-            pairs["{}"] -= 1
-    return pairs
-
-
-def _quote_imbalance(line: str) -> bool:
-    # Rough: ignore escaped quotes
-    s = re.sub(r"\\\"", "", line)
-    s = re.sub(r"\\'", "", s)
-    return (s.count('"') % 2 != 0) or (s.count("'") % 2 != 0)
+from .local_model import get_top_similar, score_code_naturalness
 
 
 def analyze_code(code: str) -> dict[str, Any]:
-    lines = code.splitlines()
-    # First, try parsing: if it fails, capture error
+    """
+    Análise combinando:
+    - modelo treinado no dataset (similaridade/naturalidade);
+    - checagem de sintaxe via `ast.parse` para detectar erros como falta de ':'.
+    """
+
+    score = score_code_naturalness(code)
+    similar_examples: list[dict[str, Any]] = get_top_similar(code, top_k=3)
+
+    issues: list[dict[str, Any]] = []
+
+    # Sinal 1: similaridade com o dataset
+    if score < 0.3:
+        issues.append(
+            {
+                "issue_type": "dataset_mismatch",
+                "line": None,
+                "col": None,
+                "message": (
+                    "O código parece pouco semelhante aos exemplos vistos no dataset "
+                    "(baixa 'naturalidade' em relação ao corpus)."
+                ),
+                "confidence": float(1.0 - score),
+            }
+        )
+
+    # Sinal 2: erro de sintaxe (por exemplo, falta de ':')
     try:
         ast.parse(code)
-        parse_ok = True
-        syntax_error = None
+        has_syntax_error = False
     except SyntaxError as e:
-        parse_ok = False
-        syntax_error = e
-
-    issues: list[Issue] = []
-
-    if not parse_ok and syntax_error is not None:
-        err_line = syntax_error.lineno or 1
-        err_col = syntax_error.offset or None
-        msg = syntax_error.msg.lower()
-
-        # Heuristic classification
-        if "expected ':'" in msg or _line_requires_colon(
-            lines[err_line - 1] if 0 < err_line <= len(lines) else ""
-        ):
-            issues.append(
-                Issue(
-                    "missing_colon",
-                    err_line,
-                    err_col,
-                    "Possível ':' ausente ao fim do bloco.",
-                    0.95,
-                )
-            )
-        elif "unexpected eof" in msg or "was never closed" in msg:
-            pairs = _count_unbalanced_pairs(code)
-            if pairs["()"] > 0:
-                issues.append(
-                    Issue(
-                        "missing_parenthesis",
-                        len(lines),
-                        None,
-                        "Parêntese de fechamento possivelmente ausente.",
-                        0.9,
-                    )
-                )
-            elif pairs["[]"] != 0 or pairs["{}"] != 0:
-                issues.append(
-                    Issue(
-                        "mismatched_bracket",
-                        err_line,
-                        err_col,
-                        "Colchetes/chaves desequilibrados.",
-                        0.8,
-                    )
-                )
-            else:
-                # fallback
-                issues.append(
-                    Issue(
-                        "syntax_error",
-                        err_line,
-                        err_col,
-                        f"Erro de sintaxe: {syntax_error.msg}",
-                        0.6,
-                    )
-                )
-        elif "invalid syntax" in msg:
-            # Try quotes on the error line
-            candidate_line = lines[err_line - 1] if 0 < err_line <= len(lines) else ""
-            if _quote_imbalance(candidate_line):
-                issues.append(
-                    Issue(
-                        "missing_quotation",
-                        err_line,
-                        err_col,
-                        "Aspas possivelmente faltando/fechamento incorreto.",
-                        0.85,
-                    )
-                )
-            else:
-                pairs = _count_unbalanced_pairs(code)
-                if pairs["()"] != 0:
-                    issues.append(
-                        Issue(
-                            "missing_parenthesis",
-                            err_line,
-                            err_col,
-                            "Parênteses desequilibrados.",
-                            0.8,
-                        )
-                    )
-                elif pairs["[]"] != 0 or pairs["{}"] != 0:
-                    issues.append(
-                        Issue(
-                            "mismatched_bracket",
-                            err_line,
-                            err_col,
-                            "Colchetes/chaves desequilibrados.",
-                            0.8,
-                        )
-                    )
-                else:
-                    issues.append(
-                        Issue(
-                            "syntax_error",
-                            err_line,
-                            err_col,
-                            f"Erro de sintaxe: {syntax_error.msg}",
-                            0.6,
-                        )
-                    )
-        else:
-            issues.append(
-                Issue(
-                    "syntax_error",
-                    err_line,
-                    err_col,
-                    f"Erro de sintaxe: {syntax_error.msg}",
-                    0.6,
-                )
-            )
+        has_syntax_error = True
+        msg = (e.msg or "").lower()
+        issue_type = "syntax_error"
+        message = f"Erro de sintaxe: {e.msg}"
+        suggested_fix: str | None = None
+        if "expected ':'" in msg:
+            issue_type = "missing_colon"
+            message = "Possível ':' ausente ao fim de um bloco (por exemplo em 'def' ou 'if')."
+            suggested_fix = "Adicione ':' ao final da linha indicada."
+        elif "was never closed" in msg or "unexpected eof while parsing" in msg:
+            issue_type = "missing_parenthesis"
+            message = "Parece faltar um parêntese ou fechamento de estrutura."
+            suggested_fix = "Verifique os parênteses/colchetes/chaves e feche os que estiverem abertos."
+        elif "string literal" in msg or "unterminated" in msg:
+            issue_type = "missing_quotation"
+            message = "Parece faltar o fechamento de uma string (aspas)."
+            suggested_fix = "Feche as aspas da string na linha indicada."
+        issues.append(
+            {
+                "issue_type": issue_type,
+                "line": e.lineno,
+                "col": e.offset,
+                "message": message,
+                "confidence": 0.95,
+                "suggested_fix": suggested_fix,
+            }
+        )
     else:
-        # Parse OK. Still run lightweight checks: quotes / brackets
-        for i, ln in enumerate(lines, start=1):
-            if _line_requires_colon(ln):
-                issues.append(
-                    Issue(
-                        "missing_colon",
-                        i,
-                        None,
-                        "Linha de bloco sem ':' ao final.",
-                        0.6,
-                    )
-                )
-        pairs = _count_unbalanced_pairs(code)
-        if any(v != 0 for v in pairs.values()):
-            issues.append(
-                Issue(
-                    "mismatched_bracket",
-                    1,
-                    None,
-                    "Parênteses/colchetes/chaves desequilibrados.",
-                    0.5,
-                )
-            )
-        for i, ln in enumerate(lines, start=1):
-            if _quote_imbalance(ln):
-                issues.append(
-                    Issue(
-                        "missing_quotation",
-                        i,
-                        None,
-                        "Aspas possivelmente faltando/fechamento incorreto.",
-                        0.5,
-                    )
-                )
+        has_syntax_error = False
 
-    return {
-        "ok": parse_ok,
-        "issues": [issue.__dict__ for issue in issues],
+    analysis: dict[str, Any] = {
+        "ok": (score >= 0.3) and not has_syntax_error,
+        "issues": issues,
+        "model_score": score,
+        "similar_examples": similar_examples,
     }
+    return analysis
